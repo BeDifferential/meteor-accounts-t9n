@@ -11,9 +11,9 @@ class T9n
     _get(x, prefix)
 
   @map: (language, map) ->
-    if not i18n.maps[language]
-      i18n.maps[language] = {}
-    _extend(i18n.maps[language], map)
+    if not i18n.map[language]
+      i18n.map[language] = {}
+    _extend(i18n.map[language], map)
     #i18n._dep.changed()
 
   _get = (x, prefix='') ->
