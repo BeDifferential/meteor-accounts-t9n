@@ -1,38 +1,65 @@
-if Meteor.isClient
-  if Package.ui
-    Handlebars = Package.ui.Handlebars
+Meteor.startup ->
+  if Meteor.isClient
+    UI.registerHelper 't9n', (x, params) ->
+      T9n.get(x, true, params.hash)
 
-  Handlebars.registerHelper 't9n', (x, prefix='') ->
-    T9n.get(x, prefix)
 
 class T9n
 
-  @get: (x, prefix='') ->
-    _get(x, prefix)
+  @maps: {}
+  @defaultLanguage: 'en'
+  @language: ''
+  @dep: new Deps.Dependency()
+  @depLanguage: new Deps.Dependency()
+  @missingPrefix = ">"
+  @missingPostfix = "<"
 
   @map: (language, map) ->
-    if not i18n.map[language]
-      i18n.map[language] = {}
-    _extend(i18n.map[language], map)
-    #i18n.dep.changed()
+    if(!@maps[language]) 
+      @maps[language] = {}
+    @registerMap(language, '', false, map)
+    @dep.changed()
 
-  _get = (x, prefix='') ->
-    prefix = (if prefix then prefix + '.' else '')
-#    console.log "_get: " + (i18n prefix + _killDots x)
-    (i18n prefix + _killDots x) || x
+  @get: (label, markIfMissing = true, args = {}) ->
+    @dep.depend()
+    @depLanguage.depend()
+    if typeof label != 'string' 
+      return ''
+    ret = @maps[@language]?[label] ||
+      @maps[@defaultLanguage]?[label] ||
+      if markIfMissing then @missingPrefix + label + @missingPostfix else label
+    if Object.keys(args).length == 0 then ret else @replaceParams ret, args
+  
+  @registerMap = (language, prefix, dot, map) ->
+    if typeof map == 'string' 
+      @maps[language][prefix] = map
+    else if typeof map == 'object'
+      if dot 
+        prefix = prefix + '.'
+      for key, value of map
+        @registerMap(language, prefix + key, true, value)        
 
-  _killDots = (x) ->
-    x.replace(/\./g, '')
+  @getLanguage: () ->
+    @depLanguage.depend()
+    return @language
 
-  _extend = (dest, from) ->
-    props = Object.getOwnPropertyNames(from)
-    props.forEach (name) ->
-      if (typeof from[name]) is 'object'
-        if (typeof dest[name]) is 'undefined'
-          dest[name] = {}
-        _extend(dest[name],from[name])
-      else
-        destination = Object.getOwnPropertyDescriptor(from, name)
-        Object.defineProperty(dest, name, destination)
+  @getLanguages: () ->
+    @dep.depend()
+    return Object.keys(@maps).sort()
+
+  @setLanguage: (language) ->
+    if(!@maps[language] || @language == language) 
+      return;
+    @language = language
+    @depLanguage.changed()
+
+  @replaceParams = (str, args) ->
+    for key, value of args
+      re = new RegExp "@{#{key}}", 'g'
+      str = str.replace re, value
+    str
+    
 
 @T9n = T9n
+@t9n = (x, includePrefix, params) -> T9n.get(x)
+
